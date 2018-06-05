@@ -9,9 +9,9 @@ Etapa de pré-processamento dos dados com Trimmomatic
 
 Avaliação das montagens (Toninho e Aline) utilizando-se:
 
-A. RSEM
-B. TransRate
-C. DEtonate
+1. RSEM
+2. TransRate
+3. Detonate
 
 3. Clusterização por kMeans ou outro método (clValid)
 4. Anotação das montagens (Trinotate)
