@@ -11,3 +11,5 @@ mf=30G
 
 echo "bash /home/externo/danielgp/bin/rsem-eval-rcsilva.sh" | qsub \
 -N alignOK -cwd -l mf=30G
+
+
