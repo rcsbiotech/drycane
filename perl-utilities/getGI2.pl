@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+# Argument one: plain text, GI file (one per line)
+# Argumento two: NCBI api (from your NCBI account)
+
 use strict;
 use warnings;
 use LWP::Simple;
@@ -18,11 +21,11 @@ my $web_environment;
               if( $line =~ m/<WebEnv>(.*)<\/WebEnv>/ ) # ... the Web environment. 
                 { $web_environment = $1; } }
 
-# Abre o arquivo de GIs
+# Open GI file
 open my $gi_list_fh, '<', "$ARGV[0]"
     or die("Missing GI list");
 
-# Declaração de variáveis
+# Variable declaration
 my $counter_input = 0;
 my @gi_list;
 my @gi_query;
@@ -31,7 +34,7 @@ my $start1 = 0;
 my $start2 = 1;
 my $iteration = 1;
 
-# Estruturar os GIs em array
+# Store GIs in array
 while (<$gi_list_fh>) {
     chomp $_;
     my $gi = $_;
@@ -39,15 +42,14 @@ while (<$gi_list_fh>) {
     }
 
 
-# Loop for a cada 250
+# Capture 250 gis
 while ($iteration < ((scalar @gi_list)/250)) {
     @gi_query = @gi_list[(250*$start1)..($start2*250)];
 
 # URL for retrieving query
-$input = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=" . join(",", @gi_query) . "&rettype=acc&api_key=6649a6c44ab0d97545450984407d7c2ace08" . "&query_key=$query_key&WebEnv=$web_environment";
+$input = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=" . join(",", @gi_query) . "&rettype=acc" . "&query_key=$query_key&WebEnv=$web_environment";
 
-#print $input;
-# Consulta dos 1000
+# Retrieve 250 accession numbers
 print "\nStarting query...\n";
 my $queried = get("$input");
 print $queried;
