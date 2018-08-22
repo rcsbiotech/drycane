@@ -12,6 +12,7 @@ my @epost_result_array;
 my $line;
 my $query_key;
 my $web_environment;
+my $your_api = $ARGV[1];
 
     $post_url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/epost.fcgi?db=snp&id=242,28853987"; 
     @epost_result_array = get( "$post_url" ); 
@@ -47,7 +48,7 @@ while ($iteration < ((scalar @gi_list)/250)) {
     @gi_query = @gi_list[(250*$start1)..($start2*250)];
 
 # URL for retrieving query
-$input = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=" . join(",", @gi_query) . "&rettype=acc" . "&query_key=$query_key&WebEnv=$web_environment";
+$input = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=" . join(",", @gi_query) . "&rettype=acc" . "&api_key=$your_api" . "&query_key=$query_key&WebEnv=$web_environment";
 
 # Retrieve 250 accession numbers
 print "\nStarting query...\n";
