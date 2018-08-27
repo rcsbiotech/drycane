@@ -338,9 +338,9 @@ AmbosClustersSig$at90 <- AmbosClusters$at90#[AmbosClusters$at90[,3] >= CutValue 
 
 print("Executando k-means...")
 # Montagem de kMeans
-kMeans30 <- kmeans(AmbosClustersSig$at30, nclust)
-kMeans60 <- kmeans(AmbosClustersSig$at60, nclust)
-kMeans90 <- kmeans(AmbosClustersSig$at90, nclust)
+kMeans30 <- kmeans(AmbosClustersSig$at30, nclust, nstart=100)
+kMeans60 <- kmeans(AmbosClustersSig$at60, nclust, nstart=100)
+kMeans90 <- kmeans(AmbosClustersSig$at90, nclust, nstart=100)
 print("Atribuindo o número do cluster...")
 
 # Atribuição do cluster na matriz original
@@ -430,3 +430,10 @@ colnames(AmbosClustersSig[[3]])[4:6] <- c("Cluster", "Tag", "Genotype")
   output.significant.at90       # Matriz de clusters para 30 dias
   output.significant.at90.rsp   # Consulta aos clusters por genótipo
   diff.at90                     # Tags que não pertencem ao mesmo cluster
+  
+  ## [.. Exportando as saídas para o Shiny ..]
+  
+  # Entrada das matrizes
+  Sig30 <- as.data.frame(AmbosClustersSig$at30, stringsAsFactors=F)
+  Sig60 <- as.data.frame(AmbosClustersSig$at60, stringsAsFactors=F)
+  Sig90 <- as.data.frame(AmbosClustersSig$at90, stringsAsFactors=F)
