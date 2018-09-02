@@ -14,7 +14,6 @@ library("ggplot2")
 # 2. Processamento da expressão diferencial (DESeq)
 # 3. Realização dos agrupamentos e criação da matriz por genótipos
 
-
 ## [.. 1. Entradas ..] ##
 
 # Objetos:
@@ -25,15 +24,35 @@ library("ggplot2")
 # efeitos do genótipo apenas: design <- c("genotype")
 # interação do genótipo com severidade: c("genotype * severity")
 # interação total: design <- c("genotype * is.stressed * time")
-## nclust -> número de agrupamentos kMeans
-## CutValue: valor de corte em relação a não estressado; já estando diferencialmente expresso;
+## parameter.nclust -> número de agrupamentos kMeans
+## parameter.cutvalue: valor de corte em relação a não estressado; já estando diferencialmente expresso;
 
 print("Initializing. Reading sample files and metadata (txt)")
+
 ## Entradas:
 dir <- "/home/rcsilva/projects/dtr/DESeq2-good"
+
+# Amostras
 samples <- read.table("/home/rcsilva/projects/dtr/DESeq2-good/samples.txt", header=T)
-nclust = 09
-CutValue = 02
+
+# Número de Clusters kMeans
+parameter.nclust <- 09
+
+# FC em relação à não estressada para excluir
+parameter.cutvalue <- 00
+
+# Valor para separação dos grupos de sinais;
+parameter.fc.threshold <- 0.5
+
+### FINALIZAÇÃO DOS INPUTS
+
+
+
+
+
+
+
+### INÍCIO DO SCRIPT
 
 # Como consultar interações:
 # http://seqanswers.com/forums/showthread.php?t=49527 - M. Love
@@ -258,14 +277,14 @@ for (contrast in 1:length(results.sig)) {
     # L2FC(AB): ((A-B+1)/(A+1))-1
     
     # Adicionada pseudocontagem (+1) em ambos os lados para remover
-    # a geração de infinitos
+    # a geração de infinitos positivos e negativos
     
-    T30D <- log2( (tag30SST+1) / (tag30NST+1))
-    T60D <- log2( (tag60SST+1) / (tag60NST+1))
-    T90D <- log2( (tag90SST+1) / (tag90NST+1))
-    S30D <- log2( (tag30SSS+1) / (tag30NSS+1))
-    S60D <- log2( (tag60SSS+1) / (tag60NSS+1))
-    S90D <- log2( (tag90SSS+1) / (tag90NSS+1))
+    T30D <- log2( (tag30SST+1) / (tag30NST+1) )
+    T60D <- log2( (tag60SST+1) / (tag60NST+1) )
+    T90D <- log2( (tag90SST+1) / (tag90NST+1) )
+    S30D <- log2( (tag30SSS+1) / (tag30NSS+1) )
+    S60D <- log2( (tag60SSS+1) / (tag60NSS+1) )
+    S90D <- log2( (tag90SSS+1) / (tag90NSS+1) )
     
     # Criação da matriz:
     # Adiciona uma linha com valores para a tag na matriz
@@ -326,21 +345,21 @@ rm(AmbosClustersSig)
 AmbosClustersSig <- list();
 
 # Significativos a 30d
-AmbosClustersSig$at30 <- AmbosClusters$at30#[AmbosClusters$at30[,1] >= CutValue |
-                                            #  AmbosClusters$at30[,1] <= -CutValue, ]
+AmbosClustersSig$at30 <- AmbosClusters$at30[AmbosClusters$at30[,1] >= parameter.cutvalue |
+                                              AmbosClusters$at30[,1] <= -parameter.cutvalue, ]
 
 # Significativos a 60d
-AmbosClustersSig$at60 <- AmbosClusters$at60#[AmbosClusters$at60[,2] >= CutValue |
-                                            #  AmbosClusters$at60[,2] <= -CutValue, ]
+AmbosClustersSig$at60 <- AmbosClusters$at60[AmbosClusters$at60[,2] >= parameter.cutvalue |
+                                              AmbosClusters$at60[,2] <= -parameter.cutvalue, ]
 # Significativo a 90d 
-AmbosClustersSig$at90 <- AmbosClusters$at90#[AmbosClusters$at90[,3] >= CutValue |
-                                           #AmbosClusters$at90[,3] <= -CutValue, ]
+AmbosClustersSig$at90 <- AmbosClusters$at90[AmbosClusters$at90[,3] >= parameter.cutvalue |
+                                           AmbosClusters$at90[,3] <= -parameter.cutvalue, ]
 
 print("Executando k-means...")
 # Montagem de kMeans
-kMeans30 <- kmeans(AmbosClustersSig$at30, nclust, nstart=100)
-kMeans60 <- kmeans(AmbosClustersSig$at60, nclust, nstart=100)
-kMeans90 <- kmeans(AmbosClustersSig$at90, nclust, nstart=100)
+kMeans30 <- kmeans(AmbosClustersSig$at30, parameter.nclust, nstart=100)
+kMeans60 <- kmeans(AmbosClustersSig$at60, parameter.nclust, nstart=100)
+kMeans90 <- kmeans(AmbosClustersSig$at90, parameter.nclust, nstart=100)
 print("Atribuindo o número do cluster...")
 
 # Atribuição do cluster na matriz original
@@ -383,12 +402,16 @@ colnames(AmbosClustersSig[[3]])[4:6] <- c("Cluster", "Tag", "Genotype")
   # para 30 dias
   output.significant.at30.z <- output.significant.at30[, c('Cluster','Genotype','Tag')]
   
+  # "Reforja" a matriz, separando as tags por genótipo por cluster
   output.significant.at30.rsp <- reshape(output.significant.at30.z, v.names='Cluster',
                                          idvar='Tag',
                                          timevar='Genotype',
                                          direction="wide")
   
+  # Adiciona nomes às linhas
   rownames(output.significant.at30.rsp) <- output.significant.at30.rsp$Tag
+  
+  # Separa somente aqueles que são de clusters diferentes
   diff.at30 <- subset(output.significant.at30.rsp, output.significant.at30.rsp[,2] != output.significant.at30.rsp[,3] )
   
   # para 60 dias
@@ -405,13 +428,15 @@ colnames(AmbosClustersSig[[3]])[4:6] <- c("Cluster", "Tag", "Genotype")
 
   # para 90 dias
   output.significant.at90.z <- output.significant.at90[, c('Cluster','Genotype','Tag')]
-  
   output.significant.at90.rsp <- reshape(output.significant.at90.z, v.names='Cluster',
                                          idvar='Tag',
                                          timevar='Genotype',
                                          direction="wide")
   
+  # Adiciona nomes às linhas
   rownames(output.significant.at90.rsp) <- output.significant.at90.rsp$Tag
+  
+  # Isola somente aqueles em clusters diferentes
   diff.at90 <- subset(output.significant.at90.rsp, output.significant.at90.rsp[,2] != output.significant.at90.rsp[,3] )
   
   ## [.. Lista final de saídas: ..]
@@ -431,9 +456,170 @@ colnames(AmbosClustersSig[[3]])[4:6] <- c("Cluster", "Tag", "Genotype")
   output.significant.at90.rsp   # Consulta aos clusters por genótipo
   diff.at90                     # Tags que não pertencem ao mesmo cluster
   
-  ## [.. Exportando as saídas para o Shiny ..]
+  
+  
+  
+  ## [.. Gerando perfis por sinal biológico ..] ##
   
   # Entrada das matrizes
   Sig30 <- as.data.frame(AmbosClustersSig$at30, stringsAsFactors=F)
   Sig60 <- as.data.frame(AmbosClustersSig$at60, stringsAsFactors=F)
   Sig90 <- as.data.frame(AmbosClustersSig$at90, stringsAsFactors=F)
+  
+  # Montagem dos perfis
+  # P - plus (diferença > +0.5 )
+  # E - equal (diferença < |0.5| )
+  # M - minus (diferença < -0.5 ), assim
+  # PP - Sobe em todos os tempos
+  # PE - Sobe, e normaliza
+  # PM - Sobe, e desce
+  # EP - Igual, e sobe
+  # EM - Igual, e desce
+  # EE - Igual, igual
+  # ME - Desce, e equaliza
+  # MP - Desce, e sobe
+  # MM - Desce, desce
+  
+  
+  
+  
+  
+    ### A 30 dias ###
+    ## Comportamento PX (Plus, e algo) ##
+  
+  # Curva maior que 0.5 para os dois pontos
+  Sig30PP <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) > parameter.fc.threshold)) &
+                              ((as.double(Sig30[,3]) - as.double(Sig30[,2]) > parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro ponto
+  Sig30PE <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) > parameter.fc.threshold)) &
+                              (((as.double(Sig30[,3]) - as.double(Sig30[,2]) < parameter.fc.threshold) &
+                                  as.double(Sig30[,3]) - as.double(Sig30[,2]) > -parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro, e desce para o segundo
+  Sig30PM <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) > parameter.fc.threshold)) &
+                              ((as.double(Sig30[,3]) - as.double(Sig30[,2]) < -parameter.fc.threshold))))
+  
+
+    ## Comportamento EX (equal, e algo)
+    # Igual, igual (EE)
+  
+  Sig30EE <- subset(Sig30, (
+    # Diferenças menores que meio, e maiores que menos meio para 60 e 30
+    (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < parameter.fc.threshold) &
+        as.double(Sig30[,2]) - as.double(Sig30[,1]) > -parameter.fc.threshold)))  &
+      # Diferenças menores que meio, e maiores que menos meio para 60 e 30
+      (((as.double(Sig30[,3]) - as.double(Sig30[,2]) < parameter.fc.threshold) &
+          as.double(Sig30[,3]) - as.double(Sig30[,2]) > -parameter.fc.threshold)))
+  
+  # Igual, e sobe;
+  
+  Sig30EP <- subset(Sig30, (
+    # Diferenças menores que meio, e maiores que menos meio para 60 e 30
+    (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < parameter.fc.threshold) &
+        as.double(Sig30[,2]) - as.double(Sig30[,1]) > -parameter.fc.threshold)))  &
+      ((as.double(Sig30[,3]) - as.double(Sig30[,2]) > parameter.fc.threshold)))
+  
+  # Igual, e desce;
+  
+  Sig30EM <- subset(Sig30, (
+    # Diferenças menores que meio, e maiores que menos meio para 60 e 30
+    (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < parameter.fc.threshold) &
+        as.double(Sig30[,2]) - as.double(Sig30[,1]) > -parameter.fc.threshold)))  &
+      ((as.double(Sig30[,3]) - as.double(Sig30[,2]) < -parameter.fc.threshold)))
+  
+  ## Comportamento MX (minus, e algo)
+  # Minus, minus (MM)
+  # Curva maior que 0.5 para os dois pontos
+  Sig30MM <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < -parameter.fc.threshold)) &
+                              ((as.double(Sig30[,3]) - as.double(Sig30[,2]) < -parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro ponto
+  Sig30ME <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < -parameter.fc.threshold)) &
+                              (((as.double(Sig30[,3]) - as.double(Sig30[,2]) < parameter.fc.threshold) &
+                                  as.double(Sig30[,3]) - as.double(Sig30[,2]) > -parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro, e desce para o segundo
+  Sig30MP <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < -parameter.fc.threshold)) &
+                              ((as.double(Sig30[,3]) - as.double(Sig30[,2]) > parameter.fc.threshold))))
+  
+  
+  ### Fim: 30 dias ###
+  
+  
+  
+  
+  ### A 60 dias ###
+  ## Comportamento PX (Plus, e algo) ##
+  
+  # Curva maior que 0.5 para os dois pontos
+  Sig60PP <- subset(Sig60, (((as.double(Sig60[,2]) - as.double(Sig60[,1]) > parameter.fc.threshold)) &
+                              ((as.double(Sig60[,3]) - as.double(Sig60[,2]) > parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro ponto
+  Sig60PE <- subset(Sig60, (((as.double(Sig60[,2]) - as.double(Sig60[,1]) > parameter.fc.threshold)) &
+                              (((as.double(Sig60[,3]) - as.double(Sig60[,2]) < parameter.fc.threshold) &
+                                  as.double(Sig60[,3]) - as.double(Sig60[,2]) > -parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro, e desce para o segundo
+  Sig60PM <- subset(Sig60, (((as.double(Sig60[,2]) - as.double(Sig60[,1]) > parameter.fc.threshold)) &
+                              ((as.double(Sig60[,3]) - as.double(Sig60[,2]) < -parameter.fc.threshold))))
+  
+  
+  ## Comportamento EX (equal, e algo)
+  # Igual, igual (EE)
+  
+  Sig60EE <- subset(Sig60, (
+    # Diferenças menores que meio, e maiores que menos meio para 60 e 60
+    (((as.double(Sig60[,2]) - as.double(Sig60[,1]) < parameter.fc.threshold) &
+        as.double(Sig60[,2]) - as.double(Sig60[,1]) > -parameter.fc.threshold)))  &
+      # Diferenças menores que meio, e maiores que menos meio para 60 e 60
+      (((as.double(Sig60[,3]) - as.double(Sig60[,2]) < parameter.fc.threshold) &
+          as.double(Sig60[,3]) - as.double(Sig60[,2]) > -parameter.fc.threshold)))
+  
+  # Igual, e sobe;
+  
+  Sig60EP <- subset(Sig60, (
+    # Diferenças menores que meio, e maiores que menos meio para 60 e 60
+    (((as.double(Sig60[,2]) - as.double(Sig60[,1]) < parameter.fc.threshold) &
+        as.double(Sig60[,2]) - as.double(Sig60[,1]) > -parameter.fc.threshold)))  &
+      ((as.double(Sig60[,3]) - as.double(Sig60[,2]) > parameter.fc.threshold)))
+  
+  # Igual, e desce;
+  
+  Sig60EM <- subset(Sig60, (
+    # Diferenças menores que meio, e maiores que menos meio para 60 e 60
+    (((as.double(Sig60[,2]) - as.double(Sig60[,1]) < parameter.fc.threshold) &
+        as.double(Sig60[,2]) - as.double(Sig60[,1]) > -parameter.fc.threshold)))  &
+      ((as.double(Sig60[,3]) - as.double(Sig60[,2]) < -parameter.fc.threshold)))
+  
+  ## Comportamento MX (minus, e algo)
+  # Minus, minus (MM)
+  # Curva maior que 0.5 para os dois pontos
+  Sig60MM <- subset(Sig60, (((as.double(Sig60[,2]) - as.double(Sig60[,1]) < -parameter.fc.threshold)) &
+                              ((as.double(Sig60[,3]) - as.double(Sig60[,2]) < -parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro ponto
+  Sig60ME <- subset(Sig60, (((as.double(Sig60[,2]) - as.double(Sig60[,1]) < -parameter.fc.threshold)) &
+                              (((as.double(Sig60[,3]) - as.double(Sig60[,2]) < parameter.fc.threshold) &
+                                  as.double(Sig60[,3]) - as.double(Sig60[,2]) > -parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro, e desce para o segundo
+  Sig60MP <- subset(Sig60, (((as.double(Sig60[,2]) - as.double(Sig60[,1]) < -parameter.fc.threshold)) &
+                              ((as.double(Sig60[,3]) - as.double(Sig60[,2]) > parameter.fc.threshold))))
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
