@@ -6,28 +6,20 @@ library("clValid")
 library("ggplot2")
 library("xlsx")
 
-# (Rafael) Ler:
-# https://support.bioconductor.org/p/63201/
+# Code sections
+# 1. User inputs
+# 2. Differential expression process with DESeq2
+# 3. Clustering by genotypes and stress
 
+## [.. 1. Inputs ..] ##
 
-# Seções do código
-# 1. Entradas do usuário
-# 2. Processamento da expressão diferencial (DESeq)
-# 3. Realização dos agrupamentos e criação da matriz por genótipos
-
-## [.. 1. Entradas ..] ##
-
-# Objetos:
-## dir: pasta onde estão localizados os resultados de quantificação do Salmon
-## samples: arquivo de texto que contem o nome das pastas (uma pasta por amostra) e os
-# desenhos experimentais
-## design -> o que se quer explorar
-# efeitos do genótipo apenas: design <- c("genotype")
-# interação do genótipo com severidade: c("genotype * severity")
-# interação total: design <- c("genotype * is.stressed * time")
-## parameter.nclust -> número de agrupamentos kMeans
-## parameter.cutvalue: valor de corte em relação a não estressado; já estando diferencialmente expresso;
-## parameter.fc.threshold: valor para separar os agrupamentos por sinal;
+# Objects:
+## dir: folder with salmon quantification files
+## samples: text file with experimental design and folder names
+## (WIP) design -> binary experimental design matrix
+## parameter.nclust -> number of desired kMeans clusters
+## parameter.cutvalue -> cut-value over not stressed
+## parameter.fc.threshold: value to split clustering by signal
 
 print("Initializing. Reading sample files and metadata (txt)")
 
