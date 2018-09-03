@@ -4,6 +4,7 @@ library("tximport")
 library("DESeq2")
 library("clValid")
 library("ggplot2")
+library("xlsx")
 
 # (Rafael) Ler:
 # https://support.bioconductor.org/p/63201/
@@ -26,6 +27,7 @@ library("ggplot2")
 # interação total: design <- c("genotype * is.stressed * time")
 ## parameter.nclust -> número de agrupamentos kMeans
 ## parameter.cutvalue: valor de corte em relação a não estressado; já estando diferencialmente expresso;
+## parameter.fc.threshold: valor para separar os agrupamentos por sinal;
 
 print("Initializing. Reading sample files and metadata (txt)")
 
@@ -35,6 +37,9 @@ dir <- "/home/rcsilva/projects/dtr/DESeq2-good"
 # Amostras
 samples <- read.table("/home/rcsilva/projects/dtr/DESeq2-good/samples.txt", header=T)
 
+# Corte de FC no DESeq2
+parameter.lfc.sig <- 04
+
 # Número de Clusters kMeans
 parameter.nclust <- 09
 
@@ -43,6 +48,9 @@ parameter.cutvalue <- 00
 
 # Valor para separação dos grupos de sinais;
 parameter.fc.threshold <- 0.5
+
+# Número de processadores, não usar mais que 20 no Thor
+parameter.threads <- 35
 
 ### FINALIZAÇÃO DOS INPUTS
 
@@ -58,7 +66,7 @@ parameter.fc.threshold <- 0.5
 # http://seqanswers.com/forums/showthread.php?t=49527 - M. Love
 
 # Alocar processadores para processos em paralelo, Thor: 30
-register(MulticoreParam(20))
+register(MulticoreParam(parameter.threads))
 
 ## Lendo cada um dos arquivos de quantificação, na pasta dir
 files <- file.path(dir, "salmon", samples$folder, "quant.sf")
@@ -70,7 +78,6 @@ names(files) <- (samples$folder)
 txi <- tximport(files, type = "salmon", txOut=TRUE)
 
 ## Adicionando o par binário "estressado/não-estressado"
-#samples[,dim(samples)[2]+1] <- NA
 samples[,7] <- NA
 counter = 1;
 
@@ -99,10 +106,12 @@ samples$genotype_time_stress <- factor(paste0(samples$genotype_time, "_", sample
 ## [.. 2. Processamento DESeq2 ..] ##
 
 ## Criando objeto (dds) para o DESeq2 para TODOS os fatores
+print("Creating DESeq2 object")
 dds <- DESeqDataSetFromTximport(txi, colData = samples,
                                 design =~ genotype_time_stress)
 
 ## Colapsar as réplicas técnicas
+print("Collapsing technical replicates")
 dds <- collapseReplicates(dds, dds$sample)
                                   
 ## Rodando o DESeq2
@@ -110,6 +119,7 @@ print("Running DESeq2")
 print("Choosen contrast:")
 print(dds@design)
 
+# Execução do DESeq
 deseq.dds <- DESeq(dds, parallel=T)
 
 # Inicializa a variável de resultados
@@ -142,11 +152,6 @@ results.contrast$TvS90D <- results(deseq.dds,
                                        "Susceptible_90d_Yes"),
                             parallel = T)
 
-# Sumário: 
-# summary(results.contrast$TvS90D)
-# summary(results.contrast$TvS60D)
-# summary(results.contrast$TvS30D)
-
 
 ## Cortar só os significativos (p <0.05) : 
 # Inicializa variável
@@ -155,13 +160,16 @@ results.sig <- list()
 #results.sig$TvS30D <- subset(results.contrast$TvS30D, (padj < 0.05))
 
 results.sig$TvS30D <- subset(results.contrast$TvS30D,
-                             (results.contrast$TvS30D$log2FoldChange > 5) | results.contrast$TvS30D$log2FoldChange < -5)
+                             (results.contrast$TvS30D$log2FoldChange > parameter.lfc.sig) |
+                               results.contrast$TvS30D$log2FoldChange < -parameter.lfc.sig)
 # Para 60D
 results.sig$TvS60D <- subset(results.contrast$TvS60D,
-                             (results.contrast$TvS60D$log2FoldChange > 5) | results.contrast$TvS60D$log2FoldChange < -5)
+                             (results.contrast$TvS60D$log2FoldChange > parameter.lfc.sig) |
+                               results.contrast$TvS60D$log2FoldChange < -parameter.lfc.sig)
 # Para 90D
 results.sig$TvS90D <- subset(results.contrast$TvS90D,
-                             (results.contrast$TvS90D$log2FoldChange > 5) | results.contrast$TvS90D$log2FoldChange < -5)
+                             (results.contrast$TvS90D$log2FoldChange > 4 ) |
+                               results.contrast$TvS90D$log2FoldChange < -4)
 
 ## [.. Final do trecho do DESeq2 ..] ##
 ## [.. Início da obtenção dos clusters ..] ##
@@ -484,21 +492,28 @@ colnames(AmbosClustersSig[[3]])[4:6] <- c("Cluster", "Tag", "Genotype")
   
   
   
-    ### A 30 dias ###
-    ## Comportamento PX (Plus, e algo) ##
+  ## A 30 dias ###
+  ## Comportamento PX (Plus, e algo) ##
+  
+  print("Criando perfis a 30 dias")
   
   # Curva maior que 0.5 para os dois pontos
   Sig30PP <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) > parameter.fc.threshold)) &
                               ((as.double(Sig30[,3]) - as.double(Sig30[,2]) > parameter.fc.threshold))))
+  # Exportar como excel
+  write.table(Sig30PP, file="Sig30PP.txt", sep="\t", quote=F)
+  
   
   # Curva maior que meio para o primeiro ponto
   Sig30PE <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) > parameter.fc.threshold)) &
                               (((as.double(Sig30[,3]) - as.double(Sig30[,2]) < parameter.fc.threshold) &
                                   as.double(Sig30[,3]) - as.double(Sig30[,2]) > -parameter.fc.threshold))))
+  write.table(Sig30PE, file="Sig30PE.txt", sep="\t", quote=F)
   
   # Curva maior que meio para o primeiro, e desce para o segundo
   Sig30PM <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) > parameter.fc.threshold)) &
                               ((as.double(Sig30[,3]) - as.double(Sig30[,2]) < -parameter.fc.threshold))))
+  write.table(Sig30PM, file="Sig30PM.txt", sep="\t", quote=F)
   
 
     ## Comportamento EX (equal, e algo)
@@ -511,6 +526,7 @@ colnames(AmbosClustersSig[[3]])[4:6] <- c("Cluster", "Tag", "Genotype")
       # Diferenças menores que meio, e maiores que menos meio para 60 e 30
       (((as.double(Sig30[,3]) - as.double(Sig30[,2]) < parameter.fc.threshold) &
           as.double(Sig30[,3]) - as.double(Sig30[,2]) > -parameter.fc.threshold)))
+  write.table(Sig30EE, file="Sig30EE.txt", sep="\t", quote=F)
   
   # Igual, e sobe;
   
@@ -519,6 +535,7 @@ colnames(AmbosClustersSig[[3]])[4:6] <- c("Cluster", "Tag", "Genotype")
     (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < parameter.fc.threshold) &
         as.double(Sig30[,2]) - as.double(Sig30[,1]) > -parameter.fc.threshold)))  &
       ((as.double(Sig30[,3]) - as.double(Sig30[,2]) > parameter.fc.threshold)))
+  write.table(Sig30EP, file="Sig30EP.txt", sep="\t", quote=F)
   
   # Igual, e desce;
   
@@ -527,28 +544,28 @@ colnames(AmbosClustersSig[[3]])[4:6] <- c("Cluster", "Tag", "Genotype")
     (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < parameter.fc.threshold) &
         as.double(Sig30[,2]) - as.double(Sig30[,1]) > -parameter.fc.threshold)))  &
       ((as.double(Sig30[,3]) - as.double(Sig30[,2]) < -parameter.fc.threshold)))
+  write.table(Sig30EM, file="Sig30EM.txt", sep="\t", quote=F)
   
   ## Comportamento MX (minus, e algo)
   # Minus, minus (MM)
   # Curva maior que 0.5 para os dois pontos
   Sig30MM <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < -parameter.fc.threshold)) &
                               ((as.double(Sig30[,3]) - as.double(Sig30[,2]) < -parameter.fc.threshold))))
+  write.table(Sig30MM, file="Sig30MM.txt", sep="\t", quote=F)
   
   # Curva maior que meio para o primeiro ponto
   Sig30ME <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < -parameter.fc.threshold)) &
                               (((as.double(Sig30[,3]) - as.double(Sig30[,2]) < parameter.fc.threshold) &
                                   as.double(Sig30[,3]) - as.double(Sig30[,2]) > -parameter.fc.threshold))))
+  write.table(Sig30ME, file="Sig30ME.txt", sep="\t", quote=F)
   
   # Curva maior que meio para o primeiro, e desce para o segundo
   Sig30MP <- subset(Sig30, (((as.double(Sig30[,2]) - as.double(Sig30[,1]) < -parameter.fc.threshold)) &
                               ((as.double(Sig30[,3]) - as.double(Sig30[,2]) > parameter.fc.threshold))))
+  write.table(Sig30MP, file="Sig30MP.txt", sep="\t", quote=F)
   
   
   ### Fim: 30 dias ###
-  
-  
-  
-  
   ### A 60 dias ###
   ## Comportamento PX (Plus, e algo) ##
   
@@ -608,18 +625,84 @@ colnames(AmbosClustersSig[[3]])[4:6] <- c("Cluster", "Tag", "Genotype")
   Sig60MP <- subset(Sig60, (((as.double(Sig60[,2]) - as.double(Sig60[,1]) < -parameter.fc.threshold)) &
                               ((as.double(Sig60[,3]) - as.double(Sig60[,2]) > parameter.fc.threshold))))
   
+  
+  
+  ### A 90 dias ###
+  ## Comportamento PX (Plus, e algo) ##
+  
+  # Curva maior que 0.5 para os dois pontos
+  Sig90PP <- subset(Sig90, (((as.double(Sig90[,2]) - as.double(Sig90[,1]) > parameter.fc.threshold)) &
+                              ((as.double(Sig90[,3]) - as.double(Sig90[,2]) > parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro ponto
+  Sig90PE <- subset(Sig90, (((as.double(Sig90[,2]) - as.double(Sig90[,1]) > parameter.fc.threshold)) &
+                              (((as.double(Sig90[,3]) - as.double(Sig90[,2]) < parameter.fc.threshold) &
+                                  as.double(Sig90[,3]) - as.double(Sig90[,2]) > -parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro, e desce para o segundo
+  Sig90PM <- subset(Sig90, (((as.double(Sig90[,2]) - as.double(Sig90[,1]) > parameter.fc.threshold)) &
+                              ((as.double(Sig90[,3]) - as.double(Sig90[,2]) < -parameter.fc.threshold))))
+  
+  
+  ## Comportamento EX (equal, e algo)
+  # Igual, igual (EE)
+  
+  Sig90EE <- subset(Sig90, (
+    # Diferenças menores que meio, e maiores que menos meio para 90 e 90
+    (((as.double(Sig90[,2]) - as.double(Sig90[,1]) < parameter.fc.threshold) &
+        as.double(Sig90[,2]) - as.double(Sig90[,1]) > -parameter.fc.threshold)))  &
+      # Diferenças menores que meio, e maiores que menos meio para 90 e 90
+      (((as.double(Sig90[,3]) - as.double(Sig90[,2]) < parameter.fc.threshold) &
+          as.double(Sig90[,3]) - as.double(Sig90[,2]) > -parameter.fc.threshold)))
+  
+  # Igual, e sobe;
+  
+  Sig90EP <- subset(Sig90, (
+    # Diferenças menores que meio, e maiores que menos meio para 90 e 90
+    (((as.double(Sig90[,2]) - as.double(Sig90[,1]) < parameter.fc.threshold) &
+        as.double(Sig90[,2]) - as.double(Sig90[,1]) > -parameter.fc.threshold)))  &
+      ((as.double(Sig90[,3]) - as.double(Sig90[,2]) > parameter.fc.threshold)))
+  
+  # Igual, e desce;
+  
+  Sig90EM <- subset(Sig90, (
+    # Diferenças menores que meio, e maiores que menos meio para 90 e 90
+    (((as.double(Sig90[,2]) - as.double(Sig90[,1]) < parameter.fc.threshold) &
+        as.double(Sig90[,2]) - as.double(Sig90[,1]) > -parameter.fc.threshold)))  &
+      ((as.double(Sig90[,3]) - as.double(Sig90[,2]) < -parameter.fc.threshold)))
+  
+  ## Comportamento MX (minus, e algo)
+  # Minus, minus (MM)
+  # Curva maior que 0.5 para os dois pontos
+  Sig90MM <- subset(Sig90, (((as.double(Sig90[,2]) - as.double(Sig90[,1]) < -parameter.fc.threshold)) &
+                              ((as.double(Sig90[,3]) - as.double(Sig90[,2]) < -parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro ponto
+  Sig90ME <- subset(Sig90, (((as.double(Sig90[,2]) - as.double(Sig90[,1]) < -parameter.fc.threshold)) &
+                              (((as.double(Sig90[,3]) - as.double(Sig90[,2]) < parameter.fc.threshold) &
+                                  as.double(Sig90[,3]) - as.double(Sig90[,2]) > -parameter.fc.threshold))))
+  
+  # Curva maior que meio para o primeiro, e desce para o segundo
+  Sig90MP <- subset(Sig90, (((as.double(Sig90[,2]) - as.double(Sig90[,1]) < -parameter.fc.threshold)) &
+                              ((as.double(Sig90[,3]) - as.double(Sig90[,2]) > parameter.fc.threshold))))
 
   
+  # Cola as colunas para entrada no Shiny
+  Names1 <- unname(AmbosClustersSig$at30[,5])
+  Names2 <- unname(AmbosClustersSig$at60[,5])
+  Names3 <- unname(AmbosClustersSig$at90[,5])
+  NamesAll <- unique(c(Names1, Names2, Names3))
+  NamesAll <- as.data.frame(NamesAll, stringsAsFactors=F)
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+  # Exportando os outros arquivos para o Shiny
+  saveRDS(NamesAll, "/home/rcsilva/DrycaneShiny/names.RDS")
+  saveRDS(Sig30, "/home/rcsilva/DrycaneShiny/Sig30.RDS")
+  saveRDS(Sig60, "/home/rcsilva/DrycaneShiny/Sig60.RDS")
+  saveRDS(Sig90, "/home/rcsilva/DrycaneShiny/Sig90.RDS")
+  saveRDS(kMeans30, "/home/rcsilva/DrycaneShiny/kMeans30.RDS")
+  saveRDS(kMeans60, "/home/rcsilva/DrycaneShiny/kMeans60.RDS")
+  saveRDS(kMeans90, "/home/rcsilva/DrycaneShiny/kMeans90.RDS")
+  saveRDS(AmbosClustersSig, "/home/rcsilva/DrycaneShiny/AmbosClustersSig.RDS")
+  #AmbosClustersSig<- readRDS("./AmbosClustersSig.RDS")
+
   
