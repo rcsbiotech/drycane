@@ -1,0 +1,563 @@
+## Análise vs "branco"
+## Requer a execução do script: Step01KallistoDE2Clu.R
+
+## Etapas analíticas:
+# 1. Analisar os controles sem o tempo:
+#   A. Tolerante severa vs tolerante não estressada
+#   B. Tolerante moderada vs tolerante não estressada
+# 2. Analisar cada controle em relação a seu par no tempo
+#   A. Tolerante severa vs tolerante não estressada
+#     I. A 30 dias;
+#     II. A 60 dias;
+#     III. A 90 dias;
+#   B. Tolerante moderada vs tolerante não estressada
+#     I. A 30 dias;
+#     II. A 60 dias;
+#     III. A 90 dias;
+# 3. Análise assimétrica genótipo x genótipo
+#   A. Tolerante estressada versus suscetível não-estressada;
+#   B. Suscetível estressada versus tolerante não-estressada;
+## [........................................]
+
+
+
+
+
+
+
+
+###### [... ETAPA  1. Analisar os controles sem o tempo...] #######
+
+# Vinculando genótipo e nível de estresse
+samples$genotype_stresslevel <- factor(paste0(samples$genotype, "_", samples$severity))
+
+# Criando o objeto DESeq2
+dds.new <- DESeqDataSetFromTximport(
+  txi, colData = samples,
+  design =~ genotype_stresslevel)
+
+# Colapsando réplicas técnicas
+dds.new <- collapseReplicates(dds.new, dds.new$sample)
+
+## Rodando o DESeq2
+print("Running DESeq2")
+print("Choosen contrast:")
+print(dds.new@design)
+
+# Execução do DESeq
+deseq.dds.new <- DESeq(dds.new, parallel=T)
+
+# Visualizar os resultados
+results(deseq.dds.new)
+
+# Inicializa a variável de resultados
+results.new.contrast <- list()
+
+# Armazena os DEs, Tolerante estressada vs branco
+results.new.contrast$STvBL_TOL <- results(deseq.dds.new,
+                                   # Escolhe um dos contrastes
+                                   # com base no resultsNames
+                                   contrast=c("genotype_stresslevel",
+                                              "Tolerant_Severe",
+                                              "Tolerant_Not_stressed"),
+                                   parallel = T)
+
+# Armazena os DEs, Suscetível estressada vs branco
+results.new.contrast$STvBL_SUSC <- results(deseq.dds.new,
+                                         # Escolhe um dos contrastes
+                                         # com base no resultsNames
+                                         contrast=c("genotype_stresslevel",
+                                                    "Susceptible_Severe",
+                                                    "Susceptible_Not_stressed"),
+                                         parallel = T)
+
+# Armazena os DEs, Suscetível, estresse moderado vs branco
+results.new.contrast$STvBL_SUSC_M <- results(deseq.dds.new,
+                                           # Escolhe um dos contrastes
+                                           # com base no resultsNames
+                                           contrast=c("genotype_stresslevel",
+                                                      "Susceptible_Moderate",
+                                                      "Susceptible_Not_stressed"),
+                                           parallel = T)
+
+# Armazena os DEs, Tolerant, estresse moderado vs branco
+results.new.contrast$STvBL_TOL_M <- results(deseq.dds.new,
+                                             # Escolhe um dos contrastes
+                                             # com base no resultsNames
+                                             contrast=c("genotype_stresslevel",
+                                                        "Tolerant_Moderate",
+                                                        "Tolerant_Not_stressed"),
+                                             parallel = T)
+
+### Cria e armazena os resultados significativos,
+## de acordo com os seus respectivos valores-corte de p-value e lfc
+results.sig <- results.new.contrast
+
+# Para tolerante, estresse severo
+results.sig$STvBL_TOL <- subset(
+  x=results.sig$STvBL_TOL,subset=(
+    results.sig$STvBL_TOL$log2FoldChange > parameter.lfc.sig &
+      results.sig$STvBL_TOL$pvalue < parameter.deseq.padj |
+      results.sig$STvBL_TOL$log2FoldChange < -parameter.lfc.sig &
+      results.sig$STvBL_TOL$pvalue < parameter.deseq.padj))
+
+# Para suscetível, estresse severo
+results.sig$STvBL_SUSC <- subset(
+  x=results.sig$STvBL_SUSC,subset=(
+    results.sig$STvBL_SUSC$log2FoldChange > parameter.lfc.sig &
+      results.sig$STvBL_SUSC$pvalue < parameter.deseq.padj |
+      results.sig$STvBL_SUSC$log2FoldChange < -parameter.lfc.sig &
+      results.sig$STvBL_SUSC$pvalue < parameter.deseq.padj))
+
+# Para tolerante, estresse moderado
+
+results.sig$STvBL_SUSC_M <- subset(
+  x=results.sig$STvBL_SUSC_M,subset=(
+    results.sig$STvBL_SUSC_M$log2FoldChange > parameter.lfc.sig &
+      results.sig$STvBL_SUSC_M$pvalue < parameter.deseq.padj |
+      results.sig$STvBL_SUSC_M$log2FoldChange < -parameter.lfc.sig &
+      results.sig$STvBL_SUSC_M$pvalue < parameter.deseq.padj))
+
+# Para suscetível, estresse moderado
+results.sig$STvBL_TOL_M <- subset(
+  x=results.sig$STvBL_TOL_M,subset=(
+    results.sig$STvBL_TOL_M$log2FoldChange > parameter.lfc.sig &
+      results.sig$STvBL_TOL_M$pvalue < parameter.deseq.padj |
+      results.sig$STvBL_TOL_M$log2FoldChange < -parameter.lfc.sig &
+      results.sig$STvBL_TOL_M$pvalue < parameter.deseq.padj))
+
+### Exportando dados
+# Estressadas em relação à seus brancos
+TSvTN <- out.anal1.step1 <- results.sig$STvBL_TOL[c(2,5)]
+SSvSN <- out.anal1.step2 <- results.sig$STvBL_SUSC[c(2,5)]
+TMvTN <- out.anal1.step3 <- results.sig$STvBL_TOL_M[c(2,5)]
+SMvSN <- out.anal1.step4 <- results.sig$STvBL_SUSC_M[c(2,5)]
+
+## Quantos em comum?
+TSvTN_u_SSvSN <- length(intersect(as.vector(TSvTN@rownames), as.vector(SSvSN@rownames)))
+TSvTN_u_TMvTN <- length(intersect(as.vector(TSvTN@rownames), as.vector(TMvTN@rownames)))
+TSvTN_u_SMvSN <- length(intersect(as.vector(TSvTN@rownames), as.vector(SMvSN@rownames)))
+SSvSN_u_SMvSN <- length(intersect(as.vector(SSvSN@rownames), as.vector(SMvSN@rownames)))
+SSvSN_u_TMvTN <- length(intersect(as.vector(SSvSN@rownames), as.vector(TMvTN@rownames)))
+SMvSN_u_TMvTN <- length(intersect(as.vector(SMvSN@rownames), as.vector(TMvTN@rownames)))
+
+
+######## [... ETAPA 2. Analisar cada controle em relação a seu par no tempo...] ########
+
+# Vinculando genótipo e nível de estresse
+samples$gt_sl_time <- factor(paste0(samples$genotype, "_", samples$severity, "_", samples$time))
+
+# Criando o objeto DESeq2
+dds.part2 <- DESeqDataSetFromTximport(
+  txi, colData = samples,
+  design =~ gt_sl_time)
+
+# Colapsando réplicas técnicas
+dds.part2 <- collapseReplicates(dds.part2, dds.part2$sample)
+
+## Rodando o DESeq2
+print("Running DESeq2")
+print("Choosen contrast:")
+print(dds.part2@design)
+
+# Execução do DESeq
+deseq.dds.part2 <- DESeq(dds.part2, parallel=T)
+
+# Visualizar os resultados
+results(deseq.dds.part2)
+
+# Inicializa a variável de resultados
+results.part2.contrast <- list()
+
+# Armazena os DEs, Tolerantes contra seus brancos (x3)
+results.part2.contrast$TS9vTN9 <- results(deseq.dds.part2,
+                                          # Escolhe um dos contrastes
+                                          # com base no resultsNames
+                                          contrast=c("gt_sl_time",
+                                                     "Tolerant_Severe_90d",
+                                                     "Tolerant_Not_stressed_90d"),
+                                          parallel = T)
+
+results.part2.contrast$TS6vTN6 <- results(deseq.dds.part2,
+                                          # Escolhe um dos contrastes
+                                          # com base no resultsNames
+                                          contrast=c("gt_sl_time",
+                                                     "Tolerant_Severe_60d",
+                                                     "Tolerant_Not_stressed_60d"),
+                                          parallel = T)
+
+results.part2.contrast$TS3vTN3 <- results(deseq.dds.part2,
+                                          # Escolhe um dos contrastes
+                                          # com base no resultsNames
+                                          contrast=c("gt_sl_time",
+                                                     "Tolerant_Severe_30d",
+                                                     "Tolerant_Not_stressed_30d"),
+                                          parallel = T)
+
+# Armazena os DEs, Suscetíveis severas contra seus brancos (x3)
+results.part2.contrast$SS9vSN9 <- results(deseq.dds.part2,
+                                          # Escolhe um dos contrastes
+                                          # com base no resultsNames
+                                          contrast=c("gt_sl_time",
+                                                     "Susceptible_Severe_90d",
+                                                     "Susceptible_Not_stressed_90d"),
+                                          parallel = T)
+
+results.part2.contrast$SS6vSN6 <- results(deseq.dds.part2,
+                                          # Escolhe um dos contrastes
+                                          # com base no resultsNames
+                                          contrast=c("gt_sl_time",
+                                                     "Susceptible_Severe_60d",
+                                                     "Susceptible_Not_stressed_60d"),
+                                          parallel = T)
+
+results.part2.contrast$SS3vSN3 <- results(deseq.dds.part2,
+                                          # Escolhe um dos contrastes
+                                          # com base no resultsNames
+                                          contrast=c("gt_sl_time",
+                                                     "Susceptible_Severe_30d",
+                                                     "Susceptible_Not_stressed_30d"),
+                                          parallel = T)
+
+
+### Cria e armazena os resultados significativos,
+## de acordo com os seus respectivos valores-corte de p-value e lfc
+results.part2.sig <- results.part2.contrast
+
+# Para tolerante, controle vs não aos 90 dias
+results.part2.sig$TS9vTN9 <- subset(
+  x=results.part2.sig$TS9vTN9, subset=(
+    results.part2.sig$TS9vTN9$log2FoldChange > parameter.lfc.sig &
+      results.part2.sig$TS9vTN9$pvalue < parameter.deseq.padj |
+      results.part2.sig$TS9vTN9$log2FoldChange < -parameter.lfc.sig &
+      results.part2.sig$TS9vTN9$pvalue < parameter.deseq.padj))
+
+# Para tolerante, controle vs não aos 60 dias
+results.part2.sig$TS6vTN6 <- subset(
+  x=results.part2.sig$TS6vTN6, subset=(
+    results.part2.sig$TS6vTN6$log2FoldChange > parameter.lfc.sig &
+      results.part2.sig$TS6vTN6$pvalue < parameter.deseq.padj |
+      results.part2.sig$TS6vTN6$log2FoldChange < -parameter.lfc.sig &
+      results.part2.sig$TS6vTN6$pvalue < parameter.deseq.padj))
+
+# Para tolerante, controle vs não aos 30 dias
+results.part2.sig$TS3vTN3 <- subset(
+  x=results.part2.sig$TS3vTN3, subset=(
+    results.part2.sig$TS3vTN3$log2FoldChange > parameter.lfc.sig &
+      results.part2.sig$TS3vTN3$pvalue < parameter.deseq.padj |
+      results.part2.sig$TS3vTN3$log2FoldChange < -parameter.lfc.sig &
+      results.part2.sig$TS3vTN3$pvalue < parameter.deseq.padj))
+
+# Para tolerante, controle vs não aos 90 dias
+results.part2.sig$SS9vSN9 <- subset(
+  x=results.part2.sig$SS9vSN9, subset=(
+    results.part2.sig$SS9vSN9$log2FoldChange > parameter.lfc.sig &
+      results.part2.sig$SS9vSN9$pvalue < parameter.deseq.padj |
+      results.part2.sig$SS9vSN9$log2FoldChange < -parameter.lfc.sig &
+      results.part2.sig$SS9vSN9$pvalue < parameter.deseq.padj))
+
+
+# Para tolerante, controle vs não aos 60 dias
+results.part2.sig$SS6vSN6 <- subset(
+  x=results.part2.sig$SS6vSN6, subset=(
+    results.part2.sig$SS6vSN6$log2FoldChange > parameter.lfc.sig &
+      results.part2.sig$SS6vSN6$pvalue < parameter.deseq.padj |
+      results.part2.sig$SS6vSN6$log2FoldChange < -parameter.lfc.sig &
+      results.part2.sig$SS6vSN6$pvalue < parameter.deseq.padj))
+
+# Para tolerante, controle vs não aos 30 dias
+results.part2.sig$SS3vSN3 <- subset(
+  x=results.part2.sig$SS3vSN3, subset=(
+    results.part2.sig$SS3vSN3$log2FoldChange > parameter.lfc.sig &
+      results.part2.sig$SS3vSN3$pvalue < parameter.deseq.padj |
+      results.part2.sig$SS3vSN3$log2FoldChange < -parameter.lfc.sig &
+      results.part2.sig$SS3vSN3$pvalue < parameter.deseq.padj))
+
+# Concatenando os valores
+SS3vSN3 <- results.part2.sig$SS3vSN3[c(1,2,5)]
+SS6vSN6 <- results.part2.sig$SS6vSN6[c(1,2,5)]
+SS9vSN9 <- results.part2.sig$SS9vSN9[c(1,2,5)]
+TS3vTN3 <- results.part2.sig$TS3vTN3[c(1,2,5)]
+TS6vTN6 <- results.part2.sig$TS6vTN6[c(1,2,5)]
+TS9vTN9 <- results.part2.sig$TS9vTN9[c(1,2,5)]
+
+### SUSCETÍVEIS ###
+
+## Quantos em comum?
+SS3vSN3_u_SS9vSN9 <- length(intersect(as.vector(SS3vSN3@rownames), as.vector(SS9vSN9@rownames)))
+SS3vSN3_u_SS6vSN6 <- length(intersect(as.vector(SS3vSN3@rownames), as.vector(SS6vSN6@rownames)))
+SS9vSN9_u_SS6vSN6 <- length(intersect(as.vector(SS9vSN9@rownames), as.vector(SS6vSN6@rownames)))
+
+## Intersecção entre os 3
+# Primeiro, entre dois
+intersect_S96 <- intersect(as.vector(SS9vSN9@rownames), as.vector(SS6vSN6@rownames))
+# Então, entre 3
+intersect_Susc <- length(intersect(intersect_S96, as.vector(SS3vSN3@rownames)))
+
+### TOLERANTES ###
+TS3vTN3_u_TS9vTN9 <- length(intersect(as.vector(TS3vTN3@rownames), as.vector(TS9vTN9@rownames)))
+TS3vTN3_u_TS6vTN6 <- length(intersect(as.vector(TS3vTN3@rownames), as.vector(TS6vTN6@rownames)))
+TS9vTN9_u_TS6vTN6 <- length(intersect(as.vector(TS9vTN9@rownames), as.vector(TS6vTN6@rownames)))
+
+## Intersecção entre os 3
+# Primeiro, entre dois
+intersect_T96 <- intersect(as.vector(TS9vTN9@rownames), as.vector(TS6vTN6@rownames))
+# Então, entre 3
+intersect_Tol <- length(intersect(intersect_T96, as.vector(TS3vTN3@rownames)))
+
+### COMPARANDO GENÓTIPOS ###
+TS9vTN9_u_SS9vSN9 <- length(intersect(as.vector(TS9vTN9@rownames), as.vector(SS9vSN9@rownames)))
+TS6vTN6_u_SS9vSN9 <- length(intersect(as.vector(TS6vTN6@rownames), as.vector(SS9vSN9@rownames)))
+TS3vTN3_u_SS9vSN9 <- length(intersect(as.vector(TS3vTN3@rownames), as.vector(SS9vSN9@rownames)))
+TS9vTN9_u_SS6vSN6 <- length(intersect(as.vector(TS9vTN9@rownames), as.vector(SS6vSN6@rownames)))
+TS6vTN6_u_SS6vSN6 <- length(intersect(as.vector(TS6vTN6@rownames), as.vector(SS6vSN6@rownames)))
+TS3vTN3_u_SS6vSN6 <- length(intersect(as.vector(TS3vTN3@rownames), as.vector(SS6vSN6@rownames)))
+TS9vTN9_u_SS3vSN3 <- length(intersect(as.vector(TS9vTN9@rownames), as.vector(SS3vSN3@rownames)))
+TS6vTN6_u_SS3vSN3 <- length(intersect(as.vector(TS6vTN6@rownames), as.vector(SS3vSN3@rownames)))
+TS3vTN3_u_SS3vSN3 <- length(intersect(as.vector(TS3vTN3@rownames), as.vector(SS3vSN3@rownames)))
+
+## Intersecção entre os 3
+# Primeiro, entre dois
+intersect_T96 <- intersect(as.vector(TS9vTN9@rownames), as.vector(TS6vTN6@rownames))
+# Então, entre 3
+intersect_Tol <- length(intersect(intersect_T96, as.vector(TS3vTN3@rownames)))
+
+
+######## [... ETAPA 3. Dinâmica das isoformas em intersecção...] ########
+
+## Nomes das isoformas em intersecção:
+names.tol <- intersect(intersect_T96, as.vector(TS3vTN3@rownames))
+names.sus <- intersect(intersect_S96, as.vector(SS3vSN3@rownames))
+
+## Separando as isoformas em tabela
+DE.intersect.tol <- as.data.frame(
+  results.part2.contrast$TS9vTN9[as.vector(rownames(results.part2.contrast$TS9vTN9[c(1,2,5)])) %in% names.tol,][c(1,2,5)])
+DE.intersect.sus <- as.data.frame(
+  results.part2.contrast$SS9vSN9[as.vector(rownames(results.part2.contrast$SS9vSN9[c(1,2,5)])) %in% names.sus,][c(1,2,5)])
+
+
+#### Passo 1. Adição dos valores médios de expressão aos intersectos ####
+
+## Intersecção das tolerantes:
+# Iniciando valores
+varCol <- 4
+varRow <- 1
+
+## Para cada isoforma na intersecção das tolerantes; faça
+for (isoform in row.names(DE.intersect.tol)){
+   
+   ## Pegue o valor de expressão absoluto médio a 90 dias
+   M9T <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+     deseq.dds.part2@colData$time == "90d" &
+       deseq.dds.part2@colData$severity == "Severe" &
+       deseq.dds.part2@colData$genotype == "Tolerant"])
+   
+   ## Pegue o valor de expressão absoluto médio a 60 dias
+   M6T <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+     deseq.dds.part2@colData$time == "60d" &
+       deseq.dds.part2@colData$severity == "Severe" &
+       deseq.dds.part2@colData$genotype == "Tolerant"])
+   
+   ## Pegue o valor de expressão absoluto médio a 30 dias
+   M3T <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+     deseq.dds.part2@colData$time == "30d" &
+       deseq.dds.part2@colData$severity == "Severe" &
+       deseq.dds.part2@colData$genotype == "Tolerant"])
+   
+   ## Pegue o valor de expressão absoluto médio a 90 dias
+   M9S <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+     deseq.dds.part2@colData$time == "90d" &
+       deseq.dds.part2@colData$severity == "Severe" &
+       deseq.dds.part2@colData$genotype == "Susceptible"])
+   
+   ## Pegue o valor de expressão absoluto médio a 60 dias
+   M6S <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+     deseq.dds.part2@colData$time == "60d" &
+       deseq.dds.part2@colData$severity == "Severe" &
+       deseq.dds.part2@colData$genotype == "Susceptible"])
+   
+   ## Pegue o valor de expressão absoluto médio a 30 dias
+   M3S <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+     deseq.dds.part2@colData$time == "30d" &
+       deseq.dds.part2@colData$severity == "Severe" &
+       deseq.dds.part2@colData$genotype == "Susceptible"])
+   
+   ## Cola os valores na matriz
+   DE.intersect.tol[varRow,varCol] <- M3T
+   DE.intersect.tol[varRow,varCol+1] <- M6T
+   DE.intersect.tol[varRow,varCol+2] <- M9T
+   DE.intersect.tol[varRow,varCol+3] <- M3S
+   DE.intersect.tol[varRow,varCol+4] <- M6S
+   DE.intersect.tol[varRow,varCol+5] <- M9S
+   
+   # Avança uma linha
+   varRow <- varRow + 1
+   
+}
+
+colnames(DE.intersect.tol)[c(4,5,6,7,8,9)] <- c("GT 30d",
+                                              "GT 60d",
+                                              "GT 90d",
+                                              "GS 30d",
+                                              "GS 60d",
+                                              "GS 90d")
+
+
+
+## Intersecção das suscetíveis:
+# Iniciando valores
+varCol <- 4
+varRow <- 1
+
+## Para cada isoforma na intersecção das tolerantes; faça
+for (isoform in row.names(DE.intersect.sus)){
+  
+  ## Pegue o valor de expressão absoluto médio a 90 dias
+  M9T <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+    deseq.dds.part2@colData$time == "90d" &
+      deseq.dds.part2@colData$severity == "Severe" &
+      deseq.dds.part2@colData$genotype == "Tolerant"])
+  
+  ## Pegue o valor de expressão absoluto médio a 60 dias
+  M6T <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+    deseq.dds.part2@colData$time == "60d" &
+      deseq.dds.part2@colData$severity == "Severe" &
+      deseq.dds.part2@colData$genotype == "Tolerant"])
+  
+  ## Pegue o valor de expressão absoluto médio a 30 dias
+  M3T <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+    deseq.dds.part2@colData$time == "30d" &
+      deseq.dds.part2@colData$severity == "Severe" &
+      deseq.dds.part2@colData$genotype == "Tolerant"])
+  
+  ## Pegue o valor de expressão absoluto médio a 90 dias
+  M9S <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+    deseq.dds.part2@colData$time == "90d" &
+      deseq.dds.part2@colData$severity == "Severe" &
+      deseq.dds.part2@colData$genotype == "Susceptible"])
+  
+  ## Pegue o valor de expressão absoluto médio a 60 dias
+  M6S <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+    deseq.dds.part2@colData$time == "60d" &
+      deseq.dds.part2@colData$severity == "Severe" &
+      deseq.dds.part2@colData$genotype == "Susceptible"])
+  
+  ## Pegue o valor de expressão absoluto médio a 30 dias
+  M3S <- mean(deseq.dds.part2@assays$data$counts[isoform,][
+    deseq.dds.part2@colData$time == "30d" &
+      deseq.dds.part2@colData$severity == "Severe" &
+      deseq.dds.part2@colData$genotype == "Susceptible"])
+  
+  ## Cola os valores na matriz
+  DE.intersect.sus[varRow,varCol] <- M3T
+  DE.intersect.sus[varRow,varCol+1] <- M6T
+  DE.intersect.sus[varRow,varCol+2] <- M9T
+  DE.intersect.sus[varRow,varCol+3] <- M3S
+  DE.intersect.sus[varRow,varCol+4] <- M6S
+  DE.intersect.sus[varRow,varCol+5] <- M9S
+  
+  # Avança uma linha
+  varRow <- varRow + 1
+  
+}
+
+colnames(DE.intersect.sus)[c(4,5,6,7,8,9)] <- c("GT 30d",
+                                                "GT 60d",
+                                                "GT 90d",
+                                                "GS 30d",
+                                                "GS 60d",
+                                                "GS 90d")
+
+## Zera os valores bm, lfc e pv
+DE.intersect.tol <- DE.intersect.tol[,c(4,5,6,7,8,9)]
+DE.intersect.sus <- DE.intersect.sus[,c(4,5,6,7,8,9)]
+
+
+###### Passo 2. Adição dos LFC por período #####
+# Os nomes são:
+# row.names(DE.intersect.tol)
+# row.names(DE.intersect.sus)
+
+# Inicializa as matrizes de saída
+tol.out <- DE.intersect.tol
+sus.out <- DE.intersect.sus
+
+## Tolerante
+tol.out <- cbind(DE.intersect.tol, as.data.frame(results.part2.sig$TS3vTN3[rownames(results.part2.sig$TS3vTN3) %in% row.names(DE.intersect.tol),][c(2,5)]))
+tol.out <- cbind(tol.out, as.data.frame(results.part2.sig$TS6vTN6[rownames(results.part2.sig$TS6vTN6) %in% row.names(DE.intersect.tol),][c(2,5)]))
+tol.out <- cbind(tol.out, as.data.frame(results.part2.sig$TS9vTN9[rownames(results.part2.sig$TS9vTN9) %in% row.names(DE.intersect.tol),][c(2,5)]))
+tol.out <- cbind(tol.out, as.data.frame(results.part2.contrast$SS9vSN9[rownames(results.part2.contrast$SS9vSN9) %in% row.names(DE.intersect.tol),][c(2,5)]))
+tol.out <- cbind(tol.out, as.data.frame(results.part2.contrast$SS6vSN6[rownames(results.part2.contrast$SS6vSN6) %in% row.names(DE.intersect.tol),][c(2,5)]))
+tol.out <- cbind(tol.out, as.data.frame(results.part2.contrast$SS3vSN3[rownames(results.part2.contrast$SS3vSN3) %in% row.names(DE.intersect.tol),][c(2,5)]))
+
+colnames(tol.out)[7:18] <- c(
+  "LFC_TS9/TN9",
+  "p-value",
+  "LFC_TS6/TN6",
+  "p-value",
+  "LFC_TS3/TN3",
+  "p-value",
+  "LFC_SS9/SN9",
+  "p-value",
+  "LFC_SS6/SN6",
+  "p-value",
+  "LFC_SS3/SN3",
+  "p-value"
+)
+
+## Suscetível
+sus.out <- cbind(DE.intersect.tol, as.data.frame(results.part2.sig$TS3vTN3[rownames(results.part2.sig$TS3vTN3) %in% row.names(DE.intersect.tol),][c(2,5)]))
+sus.out <- cbind(sus.out, as.data.frame(results.part2.sig$TS6vTN6[rownames(results.part2.sig$TS6vTN6) %in% row.names(DE.intersect.tol),][c(2,5)]))
+sus.out <- cbind(sus.out, as.data.frame(results.part2.sig$TS9vTN9[rownames(results.part2.sig$TS9vTN9) %in% row.names(DE.intersect.tol),][c(2,5)]))
+sus.out <- cbind(sus.out, as.data.frame(results.part2.contrast$SS9vSN9[rownames(results.part2.contrast$SS9vSN9) %in% row.names(DE.intersect.tol),][c(2,5)]))
+sus.out <- cbind(sus.out, as.data.frame(results.part2.contrast$SS6vSN6[rownames(results.part2.contrast$SS6vSN6) %in% row.names(DE.intersect.tol),][c(2,5)]))
+sus.out <- cbind(sus.out, as.data.frame(results.part2.contrast$SS3vSN3[rownames(results.part2.contrast$SS3vSN3) %in% row.names(DE.intersect.tol),][c(2,5)]))
+
+colnames(sus.out)[7:18] <- c(
+  "LFC_TS9/TN9",
+  "p-value",
+  "LFC_TS6/TS6",
+  "p-value",
+  "LFC_TS3/TS3",
+  "p-value",
+  "LFC_SS9/SN9",
+  "p-value",
+  "LFC_SS6/SN6",
+  "p-value",
+  "LFC_SS3/SN3",
+  "p-value"
+)
+
+
+###### Passo 3. Quais isoformas são de altíssima qualidade (montagem)? ######
+raw_good_list <- scan("/work/rcsilva/projects/drycane/analysis/01_31_R_quality/good_list.csv",
+                  what="character")
+
+good_list <- strsplit(raw_good_list[2][1],split=",")
+good_list <- as.vector(good_list[1][[1]])
+
+## Para cada isoforma, se estiver no vetor da lista boa, marque como "completa";
+## do contrário, marque como "possívelmente fragmentada"
+
+## Para tolerante
+line_cnt <- 1
+for (isoform in row.names(tol.out)) {
+  if (isoform %in% good_list) {
+    tol.out[line_cnt,19] <- "Complete"
+  } else {
+    tol.out[line_cnt,19] <- "Fragmented"
+  }
+  line_cnt = line_cnt + 1
+}
+
+## Para suscetível
+line_cnt <- 1
+for (isoform in row.names(sus.out)) {
+  if (isoform %in% good_list) {
+    sus.out[line_cnt,19] <- "Complete"
+  } else {
+    sus.out[line_cnt,19] <- "Fragmented"
+  }
+  line_cnt = line_cnt + 1
+}
+
